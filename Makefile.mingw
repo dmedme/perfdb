@@ -1,0 +1,144 @@
+#
+# Makefile for Microsoft NT-4
+#
+# Copyright (c) E2 Systems 1994. All Rights Reserved.
+# @(#) $Name$ $Id$
+#
+#
+YACC=byacc
+###########
+INCS=-I. -I../e2common  -I../../oracle/instantclient_10_2/sdk/include 
+YACC=byacc
+LEX=flex -l
+#CFLAGS=-DPOSIX -O4 -I. -DE2 $(INCS) -DAT -DNT4 -DMINGW32 -DPATH_AT -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -DAT -D_WIN32 -DWIN32 -D_WINDOWS -U_CONSOLE -DOR9
+CFLAGS=-DPOSIX -g2 -I. -DE2 $(INCS) -DAT -DNT4 -DMINGW32 -DPATH_AT -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -DAT -D_WIN32 -DWIN32 -U_WINDOWS -D_CONSOLE -DOR9 -DVCC2003
+CC= c:/mingw/bin/gcc
+RC = c:/lcc/bin/lrc
+VCC= c:/mingw/bin/gcc
+XPGCC= c:/mingw/bin/gcc
+LIBS=IRlib.a perf.a  -l../gdbm/libgdbm.a ../e2common/comlib.a -Lc:/mingw/lib -lws2_32  -lcomctl32  -lgdi32 -luser32  -lshell32 -lkernel32 -lmsvcrt
+RANLIB = c:/mingw/bin/ranlib
+AR = c:/mingw/bin/ar
+LD= c:/mingw/bin/gcc
+##########################################################################
+# The executables that are built
+##########################################################################
+OCILDLIBS=oracle/ora73.a
+#OCILDLIBS=
+#*************************************************************************
+# Main Perfdb components
+# VVVVVVVVVVVVVVVVVVVVVV
+all: e2com e2sub e2cap badsort
+	@echo "Performance Database Programs are Up To Date"
+
+badsort: badsort.o badsql.o perf.a IRlib.a
+	$(CC) $(CFLAGS) -o $@ badsort.o badsql.o perf.a $(OCILDLIBS) $(LIBS)
+e2com: e2com.o e2clib.o perf.a
+	$(CC) $(CFLAGS) -o $@ e2com.o e2clib.o perf.a $(LIBS)
+
+e2sub: e2sub.o perf.a
+	$(CC) $(CFLAGS) -o $@ e2sub.o perf.a $(LIBS)
+
+.c.o: siinrec.h perf.h
+	$(CC) $(CFLAGS) -c $*.c
+
+e2cap: e2cap.o perflib.o perf.a
+	$(CC) $(CFLAGS) -o $@ e2cap.o perflib.o perf.a $(OCILDLIBS) $(LIBS)
+
+perf.a: siinrec.o e2sqllib.o e2srclib.o e2or9lib.o cspars.o csexe.o
+	$(AR) -r $@ $?
+	$(RANLIB) $@
+csexe.o: csexe.c
+	$(CC) $(CFLAGS) -c csexe.c
+e2or9lib.o: e2sqllib.c
+	$(CC) $(CFLAGS) -c e2or9lib.c
+e2sqllib.o: e2sqllib.c
+	$(CC) $(CFLAGS) -c e2sqllib.c
+e2srclib.o: e2srclib.c
+	$(CC) $(CFLAGS) -c e2srclib.c
+#*************************************************************************
+# The Information Retrieval Stuff
+# VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+# Compile time options
+##########################################################################
+# SLEX recognises the tokens in the Search Grammar
+SLEX = IRslex.l
+#		alternative (case sensitive) is IRsilex.l
+# ELEX recognises English Words for Indexing. It is not used; orlex is used
+# instead.
+ELEX = IRxenglex.l
+#		alternative (case insensitive) is IRxienglex.l
+#
+# Microsoft NT.4
+#
+LDFLAGS=$(LIBS)
+RANLIB = ranlib
+YACC=byacc
+LEX=flex -l
+##########################################################################
+# The Information Retrieval Routines
+##########################################################################
+IRlib.a: conthunt.o IRreghunt.o nodemerge.o IRfilenames.o orlex.o cntserv.o\
+         browsecon.o tempcreate.o getfiles.o mergeoff.o mergecurr.o \
+         IRsearch.o IRindgen.o getprocs.o
+	$(AR) -r $@ $?
+	$(RANLIB) $@
+##########################################################################
+# IRsearch, the query processor
+##########################################################################
+IRsearch.o: IRslex.c IRsearch.c IRsearch.h IRfiles.h conthunt.h \
+            orlex.h
+
+IRsearch.c: IRsearch.y
+	$(YACC) IRsearch.y
+	sed -e s/yy/yy_ir_/g y.tab.c > IRsearch.c
+	rm y.tab.c
+
+IRslex.c: $(SLEX)
+	$(LEX) $(SLEX)
+	sed -e s/yy/yy_ir_/g lex.yy.c > IRslex.c
+	rm lex.yy.c
+
+##########################################################################
+# IRindgen, the index generator
+##########################################################################
+IRindgen.o: IRfiles.h mergecon.h orlex.h
+
+##########################################################################
+# The IR service routines
+##########################################################################
+browsecon.o: IRfiles.h conthunt.h
+
+IRreghunt.o:IRsearch.h IRfiles.h
+
+conthunt.o:IRsearch.h IRfiles.h conthunt.h
+
+getfiles.o:IRfiles.h
+
+mergecurr.o mergecurr.o tempcreate.o:IRfiles.h mergecon.h
+
+nodemerge.o:IRsearch.h IRfiles.h conthunt.h
+
+##########################################################################
+# The test bed for the tokenising routines
+##########################################################################
+wordhunt: wordhunt.c orlex.h IRlib.a
+	$(CC) -o wordhunt $(CFLAGS) wordhunt.c $(LIBS)
+
+##########################################################################
+# sar output file post-processing
+##########################################################################
+sarprep: sarprep.o usehist.o
+	$(CC) $(LDFLAGS) -o $@ sarprep.o usehist.o ../e2common/e2sort.o ../e2common/comlib.a -lm
+
+##########################################################################
+# Other random utilities
+# VVVVVVVVVVVVVVVVVVVVVV
+nt_util: relay getdpass
+	@echo 'Make finished'
+getdpass: getdpass.c
+	$(CC) -o getdpass $(CFLAGS) getdpass.c $(LDFLAGS) $(LIBS) fred.a
+relay: relay.c
+	$(CC) $(CFLAGS) -o relay relay.c $(LIBS)
+back_ready:
+	rm *.o *.a IRslex.c IRsearch.c cspars.c *.exe

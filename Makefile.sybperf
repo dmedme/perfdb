@@ -1,0 +1,115 @@
+#############################################################################
+# Sybase badsort
+SYBASE=/opt/sybase-11.9.2
+SYBPLATFORM=linux
+LD_LIBRARY_PATH=/usr/lib:$SYBASE/lib
+LC_ALL=default
+LIBPATH=$(SYBASE)/lib
+
+# compiler exectuables
+# CPP   - C pre-processor
+# AR    - Object archiver / librarian
+SHELL=/bin/sh
+CPP=/lib/cpp
+AR=/usr/bin/ar rv
+CC=cc
+YACC=byacc
+LEX=flex -l
+
+#
+#  The names of the targets.  The command 'make' can be used to make all
+#  the targets.  The command 'make <target_name>' makes a particular target.  
+#  For example, the command 'make exasync' will make the exasync target.
+#
+#
+# Where to get includes and libraries
+#
+SYBLIBS=-L$(LIBPATH) -lct -lcs -lcomn -lsybtcl -lnsl -lintl -lm -ldl
+INCS=-I. -I../e2common -I$(SYBASE)/include
+DEFS = 		-D$(SYBPLATFORM)=1 -DNOETHER_H -DPATH_AT -DPOSIX -DSYBASE -DLINUX -D_BSD_SOURCE -DNOBPF_H -DVERBOSE
+
+GCCFLAGS =	-ansi -pedantic -Wall -Wtraditional -Wshadow -Wpointer-arith -pipe -fwritable-strings
+#GCCFLAGS =	-pipe -fwritable-strings
+CFLAGS = 	-g $(GCCFLAGS) $(INCS) $(DEFS)
+
+all: badsort tabdiff sqldrive
+	@echo All done
+#*************************************************************************
+# The Executables to be built
+# VVVVVVVVVVVVVVVVVVVVVVVVVVV
+badsort:../e2net/genconv.c ../e2net/e2netlib.a cslib.a IRlib.a
+	$(CC) $(CFLAGS) -DREC_PROT1=syb_app_recognise \
+	-o $@ ../e2net/genconv.c nmalloc.o \
+	 ../e2net/e2netlib.a cslib.a IRlib.a ../e2common/comlib.a $(SYBLIBS) /usr/lib/libgdbm.so.1
+
+tabdiff:../schema/tabdiff.c cslib.a
+	$(CC) $(CFLAGS) -o $@ ../schema/tabdiff.c\
+	 cslib.a ../e2common/comlib.a $(SYBLIBS)
+sqldrive:../schema/sqldrive.c cslib.a
+	$(CC) $(CFLAGS) -o $@ ../schema/sqldrive.c\
+	 cslib.a ../e2common/comlib.a $(SYBLIBS)
+
+#*************************************************************************
+# The Database access routines
+# VVVVVVVVVVVVVVVVVVVVVVVVVVVV
+cslib.a: e2sqllib.o e2srclib.o e2syblib.o cspars.o csexe.o badsort.o badsyb.o
+	$(AR) $@ $?
+e2sqllib.o:tabdiff.h csexe.h
+e2srclib.o:tabdiff.h csexe.h
+e2syblib.o:tabdiff.h csexe.h
+cspars.o:tabdiff.h csexe.h cscalc.h
+csexe.o:tabdiff.h csexe.h cscalc.h
+badsort.o:badsort.h tabdiff.h csexe.h siinrec.h IRfiles.h orlex.h
+badsyb.o:badsort.h tabdiff.h csexe.h siinrec.h IRfiles.h
+#*************************************************************************
+# The Information Retrieval Stuff
+# VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+# Compile time options
+##########################################################################
+# SLEX recognises the tokens in the Search Grammar
+SLEX = IRslex.l
+#		alternative (case sensitive) is IRsilex.l
+# ELEX recognises English Words for Indexing. It is not used; orlex is used
+# instead.
+ELEX = IRxenglex.l
+#		alternative (case insensitive) is IRxienglex.l
+##########################################################################
+# The Information Retrieval Routines
+##########################################################################
+IRlib.a: conthunt.o IRreghunt.o nodemerge.o IRfilenames.o orlex.o cntserv.o\
+         browsecon.o tempcreate.o getfiles.o mergeoff.o mergecurr.o \
+         IRsearch.o IRindgen.o getprocs.o senlex.o
+	$(AR) $@ $?
+##########################################################################
+# IRsearch, the query processor
+##########################################################################
+IRsearch.o: IRslex.c IRsearch.c IRsearch.h IRfiles.h conthunt.h \
+            orlex.h
+
+IRsearch.c: IRsearch.y
+	$(YACC) IRsearch.y
+	sed -e s/yy/yy_ir_/g y.tab.c > IRsearch.c
+	rm y.tab.c
+
+IRslex.c: $(SLEX)
+	$(LEX) $(SLEX)
+	sed -e s/yy/yy_ir_/g lex.yy.c > IRslex.c
+	rm lex.yy.c
+
+##########################################################################
+# IRindgen, the index generator
+##########################################################################
+IRindgen.o: IRfiles.h mergecon.h orlex.h
+
+##########################################################################
+# The IR service routines
+##########################################################################
+browsecon.o: IRfiles.h conthunt.h
+IRreghunt.o:IRsearch.h IRfiles.h
+conthunt.o:IRsearch.h IRfiles.h senlex.h conthunt.h
+senlex.o:senlex.h
+orlex.o:orlex.h
+getfiles.o:IRfiles.h
+getprocs.o:IRfiles.h tabdiff.h csexe.h
+mergecurr.o mergecurr.o tempcreate.o:IRfiles.h mergecon.h
+nodemerge.o:IRsearch.h IRfiles.h conthunt.h

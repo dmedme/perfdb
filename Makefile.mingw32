@@ -1,0 +1,136 @@
+#
+# Makefile for Microsoft NT-4
+#
+# Copyright (c) E2 Systems 1994. All Rights Reserved.
+# @(#) $Name$ $Id$
+#
+#
+YACC=byacc
+LIBDIR=/Cygnus/Win32/i386-mingw32/lib
+INCS=-I. -I../e2common -Ioracle -I/Cygnus/Win32/include -I/Cygnus/Win32/i386-mingw32/include -I/Cygnus/Win32/i386-mingw32/include -I/Cygnus/Win32/i386-mingw32/lib/gcc-lib/i386-mingw32/egcs-2.90.27/include
+LIBS=perf.a IRlib.a ../e2common/comlib.a -l../gdbm/libgdbm.a
+CFLAGS=-DPOSIX -DNT4 -DAT -g $(INCS) -L$(LIBDIR) -L/Cygnus/Win32/lib/gcc-lib/i386-mingw32/egcs-2.90.27 -fwritable-strings
+
+AR = ar rv
+RANLIB = ar ts
+VCC = gcc
+CC = gcc
+XPGCC = gcc
+#
+OCILDLIBS=oracle/ora73.a
+#OCILDLIBS=
+#*************************************************************************
+# Main Perfdb components
+# VVVVVVVVVVVVVVVVVVVVVV
+all: e2com e2sub e2cap badsort
+	@echo "Performance Database Programs are Up To Date"
+
+badsort: badsort.o badsql.o perf.a IRlib.a
+	$(CC) $(CFLAGS) -o $@ badsort.o badsql.o perf.a $(OCILDLIBS) $(LIBS)
+e2com: e2com.o e2clib.o perf.a
+	$(CC) $(CFLAGS) -o $@ e2com.o e2clib.o perf.a $(LIBS)
+
+e2sub: e2sub.o perf.a
+	$(CC) $(CFLAGS) -o $@ e2sub.o perf.a $(LIBS)
+
+.c.o: siinrec.h perf.h
+	$(CC) $(CFLAGS) -c $*.c
+
+e2cap: e2cap.o perflib.o perf.a
+	$(CC) $(CFLAGS) -o $@ e2cap.o perflib.o perf.a $(OCILDLIBS) $(LIBS)
+
+perf.a: siinrec.o e2sqllib.o e2srclib.o e2oralib.o cspars.o csexe.o
+	$(AR) $@ $?
+	$(RANLIB) $@
+csexe.o: csexe.c
+	$(CC) $(CFLAGS) -c csexe.c
+e2oralib.o: e2sqllib.c
+	$(CC) $(CFLAGS) -c e2oralib.c
+e2sqllib.o: e2sqllib.c
+	$(CC) $(CFLAGS) -c e2sqllib.c
+e2srclib.o: e2srclib.c
+	$(CC) $(CFLAGS) -c e2srclib.c
+#*************************************************************************
+# The Information Retrieval Stuff
+# VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV
+# Compile time options
+##########################################################################
+# SLEX recognises the tokens in the Search Grammar
+SLEX = IRslex.l
+#		alternative (case sensitive) is IRsilex.l
+# ELEX recognises English Words for Indexing. It is not used; orlex is used
+# instead.
+ELEX = IRxenglex.l
+#		alternative (case insensitive) is IRxienglex.l
+#
+# Microsoft NT.4
+#
+LDFLAGS=$(LIBS)
+RANLIB = ranlib
+AR = ar rv
+VCC = gcc
+CC = gcc
+XPGCC = gcc
+YACC=byacc
+LEX=flex -l
+##########################################################################
+# The Information Retrieval Routines
+##########################################################################
+IRlib.a: conthunt.o IRreghunt.o nodemerge.o IRfilenames.o orlex.o cntserv.o\
+         browsecon.o tempcreate.o getfiles.o mergeoff.o mergecurr.o \
+         IRsearch.o IRindgen.o getprocs.o
+	$(AR) $@ $?
+	$(RANLIB) $@
+##########################################################################
+# IRsearch, the query processor
+##########################################################################
+IRsearch.o: IRslex.c IRsearch.c IRsearch.h IRfiles.h conthunt.h \
+            orlex.h
+
+IRsearch.c: IRsearch.y
+	$(YACC) IRsearch.y
+	sed -e s/yy/yy_ir_/g y.tab.c > IRsearch.c
+	rm y.tab.c
+
+IRslex.c: $(SLEX)
+	$(LEX) $(SLEX)
+	sed -e s/yy/yy_ir_/g lex.yy.c > IRslex.c
+	rm lex.yy.c
+
+##########################################################################
+# IRindgen, the index generator
+##########################################################################
+IRindgen.o: IRfiles.h mergecon.h orlex.h
+
+##########################################################################
+# The IR service routines
+##########################################################################
+browsecon.o: IRfiles.h conthunt.h
+
+IRreghunt.o:IRsearch.h IRfiles.h
+
+conthunt.o:IRsearch.h IRfiles.h conthunt.h
+
+getfiles.o:IRfiles.h
+
+mergecurr.o mergecurr.o tempcreate.o:IRfiles.h mergecon.h
+
+nodemerge.o:IRsearch.h IRfiles.h conthunt.h
+
+##########################################################################
+# The test bed for the tokenising routines
+##########################################################################
+wordhunt: wordhunt.c orlex.h IRlib.a
+	$(CC) -o wordhunt $(CFLAGS) wordhunt.c $(LIBS)
+
+##########################################################################
+# Other random utilities
+# VVVVVVVVVVVVVVVVVVVVVV
+nt_util: relay getdpass
+	@echo 'Make finished'
+getdpass: getdpass.c
+	$(CC) -o getdpass $(CFLAGS) getdpass.c $(LDFLAGS) $(LIBS) fred.a
+relay: relay.c
+	$(CC) $(CFLAGS) -o relay relay.c $(LIBS)
+back_ready:
+	rm *.o *.a IRslex.c IRsearch.c cspars.c *.exe

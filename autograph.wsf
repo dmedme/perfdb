@@ -1,0 +1,71 @@
+<?XML version="1.0" standalone="yes" ?>
+<job>
+<script language="JScript">
+<![CDATA[
+/*********************************************************************
+ * This program walks a directory tree looking for files called excel.txt
+ *
+ * These are assumed to be directives for perfmacros.xls to process
+ * text files and produce graphs.
+ *
+ * The perfmacros.xls needs to be located via an absolute path, so the
+ * program creates a subst drive letter Q for its starting directory, and
+ * assumes that perfmacros.xls is there.
+ *
+ * You will need to change this is you already have a Q drive ...
+ */
+var wscr = WScript.CreateObject("WScript.Shell");
+var fso = WScript.CreateObject("Scripting.FileSystemObject");
+var curpath = wscr.CurrentDirectory;
+wscr.Run("subst q: " + curpath, 10, true);
+var objXL = WScript.CreateObject("Excel.Application");
+/*********************************************************************
+ * Process the lists of files to process using excel.
+ */
+function do_excel_graphs(file_to_do) {
+objXL.Visible = true;
+objXL.WorkBooks.Open("q:\\perfmacros.xls");
+objXL.Run("files_read_1", file_to_do);
+objXL.WorkBooks.Close;
+return;
+}
+/*********************************************************************
+ * Descend through the directory tree
+ */
+function folderlist(fso, folderspec)
+{
+var f;
+    try
+    {
+        f = fso.GetFolder(folderspec);
+    }
+    catch(e)
+    {
+        return;
+    }
+    wscr.CurrentDirectory = folderspec;
+    WScript.Stdout.WriteLine(folderspec);
+    if (fso.FileExists("excel.txt"))
+        do_excel_graphs(folderspec + "\\excel.txt");
+    
+    var sf = new Enumerator(f.SubFolders);
+    var f1;
+
+    for (; !sf.atEnd(); sf.moveNext())
+    {
+        f1 = sf.item();
+        folderlist(fso, f1.path)
+    }
+    return;
+}
+/*****************************************************************************
+ * Main program starts here
+ * VVVVVVVVVVVVVVVVVVVVVVVV
+ */
+    folderlist(fso, curpath);
+    objXL.Quit();
+    wscr.Run("subst q: /D", 10, true);
+    WScript.Quit();
+]]>
+</script>
+</job>
